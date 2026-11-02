@@ -1,16 +1,6 @@
 "use strict";
 
-const DEFAULT_SETTINGS = {
-  active: true,
-  imgLazyLoad: false,
-  preloadViewport: true,
-  preloadAssets: true,
-  blacklistSites: "",
-};
-
-// "example.com", "www.example.com" or "*.example.com"; anything else is not a valid match-pattern host.
-// options.js validates with the same pattern; this is the safety net for older stored values.
-const BLACKLIST_HOST = /^(\*\.)?[a-z0-9_-]+(\.[a-z0-9_-]+)*$/;
+const { DEFAULT_SETTINGS, blacklistEntries } = globalThis.snappyPageload;
 
 // Only web pages; the preloader has nothing to do on file:, ftp: or other schemes.
 const WEB_PAGES = ["http://*/*", "https://*/*"];
@@ -20,23 +10,18 @@ let registeredScripts = [];
 // Identifies the configuration behind registeredScripts, so unrelated setting changes
 // (e.g. preloadViewport, which preload.js reads itself) don't trigger a re-registration.
 let registeredConfig = null;
+// "set" or "clear" once applied to privacy.network.networkPredictionEnabled; null until the first run.
+let appliedPrediction = null;
 let applyQueue = Promise.resolve();
 
-async function getSettings() {
-  const stored = await browser.storage.sync.get(Object.keys(DEFAULT_SETTINGS));
-  return { ...DEFAULT_SETTINGS, ...stored };
+function getSettings() {
+  return browser.storage.sync.get(DEFAULT_SETTINGS);
 }
 
 function toExcludeMatches(blacklistSites) {
-  return blacklistSites
-    .split(",")
-    .map((host) => host.trim().toLowerCase())
-    .filter((host) => {
-      if (BLACKLIST_HOST.test(host)) return true;
-      if (host) console.warn(`[snappy pageload] Ignoring invalid blacklist entry: ${host}`);
-      return false;
-    })
-    .map((host) => `*://${host}/*`);
+  const { hosts, invalid } = blacklistEntries(blacklistSites);
+  for (const host of invalid) console.warn(`[snappy pageload] Ignoring invalid blacklist entry: ${host}`);
+  return hosts.map((host) => `*://${host}/*`);
 }
 
 function updateBrowserAction(active) {
@@ -66,7 +51,7 @@ async function registerContentScripts(settings) {
       next.push(
         await contentScriptAPI.register({
           ...target,
-          js: [{ file: "js/resource-warmer.js" }, { file: "js/preload.js" }],
+          js: [{ file: "js/shared.js" }, { file: "js/resource-warmer.js" }, { file: "js/preload.js" }],
           runAt: "document_idle",
         })
       );
@@ -81,8 +66,7 @@ async function registerContentScripts(settings) {
         );
       }
     }
-    // Safari event pages can restart while earlier registrations remain active.
-    // Keep them until the complete replacement has been registered successfully.
+    // Commit point for adapters: the complete replacement is registered at this point.
     await contentScriptAPI.finishUpdate?.();
   } catch (error) {
     await Promise.allSettled(next.map((script) => script.unregister()));
@@ -94,20 +78,44 @@ async function registerContentScripts(settings) {
   await Promise.allSettled(previous.map((script) => script.unregister()));
 }
 
-// Serializes setting changes and toggles so concurrent events can't interleave.
-function enqueue(task) {
-  applyQueue = applyQueue
-    .then(task)
-    .catch((error) => console.error("[snappy pageload] Failed to apply settings:", error));
-  return applyQueue;
+// Firefox maps this setting to network.prefetch-next, DNS prefetching and the network predictor,
+// so turning it on restores link prefetching even when a privacy setup disabled it. Clearing it
+// hands control back to the user's own setting. Absent in Safari.
+async function applyBrowserPrefetch(settings) {
+  const prediction = browser.privacy?.network?.networkPredictionEnabled;
+  if (!prediction) return;
+
+  const desired = settings.active && settings.browserPrefetch ? "set" : "clear";
+  if (desired === appliedPrediction) return;
+
+  try {
+    if (desired === "set") {
+      const { levelOfControl } = await prediction.get({});
+      if (levelOfControl === "controllable_by_this_extension" || levelOfControl === "controlled_by_this_extension") {
+        await prediction.set({ value: true });
+      } else {
+        console.warn("[snappy pageload] Cannot enable built-in prefetching: another extension or policy controls it.");
+      }
+    } else {
+      await prediction.clear({});
+    }
+    appliedPrediction = desired;
+  } catch (error) {
+    console.error("[snappy pageload] Failed to update built-in prefetching:", error);
+  }
 }
 
+// Serializes setting changes and toggles so concurrent events can't interleave.
 function applySettings() {
-  return enqueue(async () => {
-    const settings = await getSettings();
-    updateBrowserAction(settings.active);
-    await registerContentScripts(settings);
-  });
+  applyQueue = applyQueue
+    .then(async () => {
+      const settings = await getSettings();
+      updateBrowserAction(settings.active);
+      await applyBrowserPrefetch(settings);
+      await registerContentScripts(settings);
+    })
+    .catch((error) => console.error("[snappy pageload] Failed to apply settings:", error));
+  return applyQueue;
 }
 
 browser.runtime.onInstalled.addListener((details) => {

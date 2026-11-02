@@ -4,10 +4,9 @@ import vm from "node:vm";
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
-import { readScript, sleep } from "./helpers.mjs";
+import { createFakeBrowser, readScript, settle } from "./helpers.mjs";
 
 const adapterSource = readFileSync(new URL("../safari/content-scripts-adapter.js", import.meta.url), "utf8");
-const settle = () => sleep(20);
 
 // Fake browser.scripting backed by a store that outlives any one vm ("persistAcrossSessions").
 function createScripting(store = new Map()) {
@@ -133,31 +132,13 @@ test("adapter does nothing when browser.contentScripts.register exists", () => {
   assert.equal(context.fasterPageloadContentScripts, undefined);
 });
 
-// Runs adapter then background.js in one vm, as Safari's background scripts do.
-async function startSafariBackground(scripting, storage) {
-  const listeners = { changed: [] };
-  const icons = [];
-  const browser = {
-    scripting: scripting.api,
-    storage: {
-      sync: {
-        get: async (keys) => Object.fromEntries(keys.filter((key) => key in storage).map((key) => [key, storage[key]])),
-        set: async (values) => {
-          const changes = {};
-          for (const [key, newValue] of Object.entries(values)) {
-            changes[key] = { oldValue: storage[key], newValue };
-            storage[key] = newValue;
-          }
-          setTimeout(() => listeners.changed.forEach((listener) => listener(changes, "sync")), 0);
-        },
-      },
-      onChanged: { addListener: (listener) => listeners.changed.push(listener) },
-    },
-    browserAction: { setIcon: ({ path }) => icons.push(path), setTitle: () => {}, onClicked: { addListener: () => {} } },
-    runtime: { onInstalled: { addListener: () => {} }, getURL: (path) => path, openOptionsPage: async () => {} },
-    tabs: { create: () => {} },
-  };
+// Runs shared.js, the adapter, then background.js in one vm, as Safari's background scripts do.
+async function startSafariBackground(scripting, stored) {
+  const { browser, icons } = createFakeBrowser(stored);
+  delete browser.privacy; // Safari has no browser.privacy
+  browser.scripting = scripting.api;
   const context = vm.createContext({ browser, crypto: { randomUUID }, console: { ...console, warn: () => {}, error: () => {} } });
+  vm.runInContext(readScript("shared.js"), context);
   vm.runInContext(adapterSource, context);
   vm.runInContext(readScript("background.js"), context);
   await settle();
@@ -169,7 +150,7 @@ const registeredFiles = (scripting) => [...scripting.store.values()].map(({ js }
 test("safari background registers the preloader through the adapter", async () => {
   const scripting = createScripting();
   await startSafariBackground(scripting, {});
-  assert.deepEqual(registeredFiles(scripting), [["js/resource-warmer.js", "js/preload.js"]]);
+  assert.deepEqual(registeredFiles(scripting), [["js/shared.js", "js/resource-warmer.js", "js/preload.js"]]);
   const [script] = scripting.store.values();
   assert.equal(script.persistAcrossSessions, true);
   assert.deepEqual([...script.matches], ["http://*/*", "https://*/*"]);
@@ -217,7 +198,7 @@ test("staged Safari extension uses the adapter and event-page manifest", () => {
   assert.equal(manifest.background.persistent, false);
   assert.ok(manifest.permissions.includes("scripting"));
   assert.equal(manifest.browser_specific_settings, undefined);
-  assert.deepEqual(manifest.background.scripts, ["js/safari-content-scripts-adapter.js", "js/background.js"]);
+  assert.deepEqual(manifest.background.scripts, ["js/safari-content-scripts-adapter.js", "js/shared.js", "js/background.js"]);
   assert.ok(existsSync(new URL("js/safari-content-scripts-adapter.js", staged)));
-  assert.ok(!existsSync(new URL("js/safari-config.js", staged)));
+  assert.ok(!manifest.permissions.includes("privacy"));
 });

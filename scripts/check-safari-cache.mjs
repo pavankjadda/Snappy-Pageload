@@ -11,6 +11,10 @@ const freshPath = `/fresh/${id}`;
 const hiddenPath = `/hidden/${id}`;
 const font = readFileSync("/System/Library/Fonts/Supplemental/Arial.ttf");
 const image = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aqusAAAAASUVORK5CYII=", "base64");
+function record(path, request) {
+  requests.push({ path, destination: request.headers["sec-fetch-dest"], time: new Date().toISOString() });
+  console.log(JSON.stringify(requests.at(-1)));
+}
 const server = createServer((request, response) => {
   const path = new URL(request.url, "http://127.0.0.1").pathname;
   response.setHeader("Cache-Control", "no-store");
@@ -20,8 +24,7 @@ const server = createServer((request, response) => {
     return;
   }
   if (path.startsWith(`/assets/${id}/`)) {
-    requests.push({ path, destination: request.headers["sec-fetch-dest"], time: new Date().toISOString() });
-    console.log(JSON.stringify(requests.at(-1)));
+    record(path, request);
     const cached = path.includes("/cached/");
     response.setHeader("Cache-Control", cached ? "private, max-age=600" : "no-store");
     if (path.endsWith("site.css")) {
@@ -40,14 +43,12 @@ const server = createServer((request, response) => {
   }
   response.setHeader("Content-Type", "text/html; charset=utf-8");
   if (path === hiddenPath) {
-    requests.push({ path, destination: request.headers["sec-fetch-dest"], time: new Date().toISOString() });
-    console.log(JSON.stringify(requests.at(-1)));
+    record(path, request);
     response.end("<!doctype html><title>Offscreen control</title><h1>Offscreen control</h1>");
     return;
   }
   if (path === cachedPath || path === freshPath) {
-    requests.push({ path, destination: request.headers["sec-fetch-dest"], time: new Date().toISOString() });
-    console.log(JSON.stringify(requests.at(-1)));
+    record(path, request);
     if (path === cachedPath) response.setHeader("Cache-Control", "private, max-age=600");
     const assets = `/assets/${id}/${path === cachedPath ? "cached" : "fresh"}`;
     response.end(`<!doctype html><title>Safari cache check destination</title>

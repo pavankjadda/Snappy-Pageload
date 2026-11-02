@@ -3,12 +3,15 @@
 const activeElement = document.getElementById("active");
 const preloadViewportElement = document.getElementById("preloadViewport");
 const preloadAssetsElement = document.getElementById("preloadAssets");
+const browserPrefetchElement = document.getElementById("browserPrefetch");
 const imgLazyLoadElement = document.getElementById("imgLazyLoad");
 const blacklistSitesElement = document.getElementById("blacklistSites");
 const statusElement = document.getElementById("status");
 
-// Must stay in sync with BLACKLIST_HOST in background.js.
-const BLACKLIST_HOST = /^(\*\.)?[a-z0-9_-]+(\.[a-z0-9_-]+)*$/;
+const { DEFAULT_SETTINGS, BLACKLIST_HOST } = globalThis.snappyPageload;
+
+// The privacy API does not exist in Safari, so the setting would do nothing there.
+if (!browser.privacy) document.getElementById("browserPrefetch-row").style.display = "none";
 
 // Accepts "example.com", "*.example.com" or a pasted URL such as "https://example.com:8080/path"
 // and reduces it to the host. Ports are dropped because match patterns cannot express them.
@@ -52,6 +55,7 @@ async function saveOptions(event) {
       active: activeElement.checked,
       preloadViewport: preloadViewportElement.checked,
       preloadAssets: preloadAssetsElement.checked,
+      browserPrefetch: browserPrefetchElement.checked,
       imgLazyLoad: imgLazyLoadElement.checked,
       blacklistSites,
     });
@@ -64,12 +68,13 @@ async function saveOptions(event) {
 
 async function restoreOptions() {
   try {
-    const settings = await browser.storage.sync.get(["active", "preloadViewport", "preloadAssets", "imgLazyLoad", "blacklistSites"]);
-    activeElement.checked = settings.active !== false;
-    preloadViewportElement.checked = settings.preloadViewport !== false;
-    preloadAssetsElement.checked = settings.preloadAssets !== false;
-    imgLazyLoadElement.checked = settings.imgLazyLoad === true;
-    blacklistSitesElement.value = settings.blacklistSites || "";
+    const settings = await browser.storage.sync.get(DEFAULT_SETTINGS);
+    activeElement.checked = settings.active;
+    preloadViewportElement.checked = settings.preloadViewport;
+    preloadAssetsElement.checked = settings.preloadAssets;
+    browserPrefetchElement.checked = settings.browserPrefetch;
+    imgLazyLoadElement.checked = settings.imgLazyLoad;
+    blacklistSitesElement.value = settings.blacklistSites;
   } catch (error) {
     statusElement.textContent = `Could not load settings: ${error}`;
   }

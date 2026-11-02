@@ -27,7 +27,9 @@ const PAGE = `<!doctype html><html><head></head><body>
 
 const start = async (options = {}) => {
   const page = runContentScript("preload.js", { html: PAGE, ...options });
-  await sleep(50);
+  // The script's idle fallback is setTimeout(0); the settings promise resolves before that.
+  await sleep(0);
+  await sleep(0);
   return page;
 };
 
@@ -60,12 +62,14 @@ test("hover works with the default settings and does not warm assets", async () 
 });
 
 test("links with query strings and user-generated links are prefetched on hover", async () => {
-  const { window, document } = await startIntent();
-  for (const id of ["query", "ugc", "in-comment"]) {
-    hover(window, document.getElementById(id));
-    await sleep(100);
-  }
-  assert.equal(prefetchedUrls(document).length, 3);
+  await Promise.all(
+    ["query", "ugc", "in-comment"].map(async (id) => {
+      const { window, document } = await startIntent();
+      hover(window, document.getElementById(id));
+      await sleep(100);
+      assert.equal(prefetchedUrls(document).length, 1, id);
+    })
+  );
 });
 
 test("hovering a child element of a link prefetches the link", async () => {
@@ -76,13 +80,16 @@ test("hovering a child element of a link prefetches the link", async () => {
 });
 
 test("unsafe, external and non-navigational links are never prefetched on hover", async () => {
-  const { window, document } = await startIntent();
   const skipped = ["external", "credentials", "logout", "sign-out", "encoded", "delete", "hash", "self", "download", "opt-out", "mailto", "vote", "like", "mark-read", "add-to-cart"];
-  for (const id of skipped) {
-    hover(window, document.getElementById(id));
-    await sleep(80);
-  }
-  assert.deepEqual(prefetchedUrls(document), []);
+  // One page per link: a new hover replaces the pending timer of the previous one.
+  await Promise.all(
+    skipped.map(async (id) => {
+      const { window, document } = await startIntent();
+      hover(window, document.getElementById(id));
+      await sleep(100);
+      assert.deepEqual(prefetchedUrls(document), [], id);
+    })
+  );
 });
 
 test("leaving the link before the delay cancels the prefetch", async () => {
@@ -170,23 +177,28 @@ test("active false and blacklisted hosts do nothing at all", async () => {
     { blacklistSites: "*.example.test" },
     { blacklistSites: "*.shop.example.test" },
   ];
-  for (const storage of cases) {
-    const { window, document, observed } = await start({ storage });
-    const link = document.getElementById("plain");
-    link.dispatchEvent(new window.MouseEvent("mousedown", { bubbles: true, button: 0 }));
-    hover(window, link);
-    await sleep(100);
-    assert.equal(observed.length, 0, JSON.stringify(storage));
-    assert.deepEqual(prefetchedUrls(document), [], JSON.stringify(storage));
-  }
+  await Promise.all(
+    cases.map(async (storage) => {
+      const { window, document, observed } = await start({ storage });
+      const link = document.getElementById("plain");
+      link.dispatchEvent(new window.MouseEvent("mousedown", { bubbles: true, button: 0 }));
+      hover(window, link);
+      await sleep(100);
+      assert.equal(observed.length, 0, JSON.stringify(storage));
+      assert.deepEqual(prefetchedUrls(document), [], JSON.stringify(storage));
+    })
+  );
 });
 
 test("blacklist entries that do not match this host, or are invalid, are ignored", async () => {
-  for (const blacklistSites of ["example.test", "*.other.test", "shop.example.test.evil.test", "not a host!, ,", ""]) {
-    const { window, document } = await start({ storage: { blacklistSites } });
-    document.getElementById("plain").dispatchEvent(new window.MouseEvent("mousedown", { bubbles: true, button: 0 }));
-    assert.deepEqual(prefetchedUrls(document), [CART], blacklistSites);
-  }
+  const entries = ["example.test", "*.other.test", "shop.example.test.evil.test", "not a host!, ,", ""];
+  await Promise.all(
+    entries.map(async (blacklistSites) => {
+      const { window, document } = await start({ storage: { blacklistSites } });
+      document.getElementById("plain").dispatchEvent(new window.MouseEvent("mousedown", { bubbles: true, button: 0 }));
+      assert.deepEqual(prefetchedUrls(document), [CART], blacklistSites);
+    })
+  );
 });
 
 test("a wildcard blacklist entry also matches the bare domain", async () => {
@@ -254,11 +266,13 @@ test("Safari: hover adds nothing and visible links only warm assets, without an 
   intersect(on.observers[0], [on.document.getElementById("plain")]);
   await sleep(0);
   assert.deepEqual(prefetchedUrls(on.document), []);
-  assert.deepEqual(on.warmCalls, [[CART]]);
+  assert.equal(on.warmCalls.length, 1);
+  assert.equal(on.warmCalls[0][0], CART);
+  assert.equal(on.warmCalls[0][1]?.after, undefined);
 
   const off = await start({ prefetchSupported: false, warmPage: true, storage: { preloadAssets: false } });
-  intersect(off.observers[0], [off.document.getElementById("plain")]);
-  await sleep(0);
+  assert.equal(off.observers.length, 0);
+  assert.equal(off.observed.length, 0);
   assert.deepEqual(prefetchedUrls(off.document), []);
   assert.equal(off.warmCalls.length, 0);
 });

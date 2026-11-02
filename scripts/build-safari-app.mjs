@@ -12,12 +12,13 @@ const packager = ["safari-web-extension-packager", "safari-web-extension-convert
   (tool) => spawnSync("xcrun", ["--find", tool], { stdio: "ignore" }).status === 0,
 );
 if (!packager) throw new Error("Safari's web extension packager requires a full Xcode installation.");
-await import("./build-safari.mjs");
+const { version } = await import("./build-safari.mjs");
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const appName = "Snappy Pageload";
-const { version } = JSON.parse(await readFile(new URL("../manifest.json", import.meta.url), "utf8"));
 const bundleID = process.env.SAFARI_BUNDLE_ID || "io.github.pavankjadda.SnappyPageload";
+// Xcode 27's packager derives the app ID from the spaced name; see the repair below.
+const packagerAppID = `${bundleID.slice(0, bundleID.lastIndexOf(".") + 1)}${appName.replaceAll(" ", "-")}`;
 const project = `build/safari/project/${appName}/${appName}.xcodeproj`;
 const versionFile = new URL("../build/safari/build-number", import.meta.url);
 await mkdir(new URL("../build/safari/", import.meta.url), { recursive: true });
@@ -51,7 +52,7 @@ for (const name of ["project.xcproj", "project.pbxproj"]) {
     throw error;
   }
   const contents = await readFile(file, "utf8");
-  await writeFile(file, contents.replaceAll("io.github.pavankjadda.Snappy-Pageload", bundleID));
+  await writeFile(file, contents.replaceAll(packagerAppID, bundleID));
 }
 const configuration = signingMode === "adhoc" ? "Release" : "Debug";
 const signingSettings = signingMode === "adhoc"

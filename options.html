@@ -55,6 +55,14 @@
               <input class="toggle" type="checkbox" id="preloadAssets" aria-describedby="preloadAssets-help" checked>
             </div>
 
+            <div class="setting-row" id="browserPrefetch-row">
+              <div class="setting-copy">
+                <label class="setting-label" for="browserPrefetch">Use Firefox's built-in prefetching</label>
+                <p class="setting-help" id="browserPrefetch-help">Turns on Firefox's link prefetching, DNS prefetching and network prediction, even if a privacy setup such as arkenfox or LibreWolf turned them off. Turn off to restore your own setting.</p>
+              </div>
+              <input class="toggle" type="checkbox" id="browserPrefetch" aria-describedby="browserPrefetch-help" checked>
+            </div>
+
             <div class="setting-row">
               <div class="setting-copy">
                 <label class="setting-label" for="imgLazyLoad">Lazy-load images</label>
@@ -86,6 +94,7 @@
       </form>
     </main>
 
+    <script src="js/shared.js"></script>
     <script src="js/options.js"></script>
   </body>
 </html>

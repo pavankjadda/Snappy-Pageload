@@ -1,10 +1,9 @@
 import { execFileSync } from "node:child_process";
-import { mkdir, readFile, rm } from "node:fs/promises";
+import { mkdir, rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
-await import("./build-safari.mjs");
+const { version } = await import("./build-safari.mjs");
 const root = new URL("../", import.meta.url);
-const { version } = JSON.parse(await readFile(new URL("manifest.json", root), "utf8"));
 const artifacts = new URL("web-ext-artifacts/", root);
 await mkdir(artifacts, { recursive: true });
 const archive = new URL(`snappy_pageload-${version}-safari-web-extension.zip`, artifacts);

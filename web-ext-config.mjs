@@ -9,6 +9,7 @@ export default {
     "web-ext-artifacts",
     "package.json",
     "pnpm-lock.yaml",
+    "pnpm-workspace.yaml",
     "web-ext-config.mjs",
     "Makefile",
     "CHANGELOG.md",

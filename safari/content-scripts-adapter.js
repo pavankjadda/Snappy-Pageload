@@ -8,13 +8,12 @@ if (!browser.contentScripts?.register) {
   const ownPrefix = `${prefix}${generation}-`;
   let snapshot;
 
-  // Registrations persist across sessions, so earlier background runs may have left some behind.
+  // Registrations persist across sessions, and Safari event pages can restart while earlier
+  // registrations remain active; keep them until the complete replacement has been registered.
   // A failed snapshot is dropped so the next call retries instead of failing until a restart.
   function staleScripts() {
     snapshot ??= browser.scripting.getRegisteredContentScripts().then(
-      (scripts) => ({
-        ids: scripts.map(({ id }) => id).filter((id) => id.startsWith(prefix) && !id.startsWith(ownPrefix)),
-      }),
+      (scripts) => scripts.map(({ id }) => id).filter((id) => id.startsWith(prefix) && !id.startsWith(ownPrefix)),
       (error) => {
         snapshot = undefined;
         throw error;
@@ -34,8 +33,10 @@ if (!browser.contentScripts?.register) {
     },
     async finishUpdate() {
       const stale = await staleScripts();
-      if (stale.ids.length) await browser.scripting.unregisterContentScripts({ ids: stale.ids });
-      stale.ids = [];
+      if (stale.length) {
+        await browser.scripting.unregisterContentScripts({ ids: stale });
+        snapshot = Promise.resolve([]);
+      }
     },
   };
 }

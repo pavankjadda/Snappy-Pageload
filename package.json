@@ -1,7 +1,7 @@
 {
   "name": "snappy-pageload",
   "private": true,
-  "version": "2.0.0",
+  "version": "1.0.0",
   "description": "Preload visible same-site pages and their declared assets.",
   "license": "MIT",
   "repository": {

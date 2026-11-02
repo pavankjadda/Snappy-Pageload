@@ -12,13 +12,15 @@ for (const file of ["js", "icons", "static", "options.html", "options.css"]) {
 await cp(new URL("safari/content-scripts-adapter.js", root), new URL("js/safari-content-scripts-adapter.js", output));
 await cp(new URL("safari/setup.html", root), new URL("static/setup.html", output));
 const manifest = JSON.parse(await readFile(new URL("manifest.json", root), "utf8"));
+export const { version } = manifest;
 delete manifest.browser_specific_settings;
 delete manifest.developer;
 manifest.description = "Preload visible same-site pages and their declared assets. Local Safari build with experimental HTTP cache warming.";
 manifest.background = {
-  scripts: ["js/safari-content-scripts-adapter.js", "js/background.js"],
+  scripts: ["js/safari-content-scripts-adapter.js", ...manifest.background.scripts],
   persistent: false,
 };
-manifest.permissions.push("scripting");
+// Safari has no browser.privacy.
+manifest.permissions = [...manifest.permissions.filter((permission) => permission !== "privacy"), "scripting"];
 await writeFile(new URL("manifest.json", output), JSON.stringify(manifest, null, 2) + "\n");
 console.log(`Safari extension staged at ${fileURLToPath(output)}`);
