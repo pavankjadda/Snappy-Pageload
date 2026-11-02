@@ -2,6 +2,9 @@
 export default {
   ignoreFiles: [
     "test",
+    "scripts",
+    "safari",
+    "build",
     "node_modules",
     "web-ext-artifacts",
     "package.json",

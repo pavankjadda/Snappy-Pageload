@@ -1,23 +1,90 @@
-<!DOCTYPE html>
-<html>
+<!doctype html>
+<html lang="en">
   <head>
     <meta charset="utf-8">
-    <style>
-      .note {
-        color: #777777;
-      }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Snappy Pageload Settings</title>
+    <link rel="stylesheet" href="options.css">
   </head>
 
   <body>
-    <form>
-      <div><label>Preload every visible link: <input type="checkbox" id="preloadViewport"></label></div>
-      <div><label>Lazyload images: <input type="checkbox" id="imgLazyLoad"></label></div>
-      <div><label>Blacklist sites: <input type="text" id="blacklistSites" placeholder="www.example.com, *.example2.com" size="30"></label></div>
-      <div class="note">Comma separated hosts, e.g. www.example.com, example2.com or *.example2.com (all subdomains). Disables the add-on on those sites.</div>
-      <br>
-      <div><button type="submit">Save</button> <span id="status" role="status"></span></div>
-    </form>
+    <main class="settings-shell">
+      <header class="page-header">
+        <div class="brand-mark" aria-hidden="true">
+          <img src="static/rocket.svg" alt="">
+        </div>
+        <div>
+          <p class="eyebrow">Extension settings</p>
+          <h1>Snappy Pageload</h1>
+          <p class="page-lead">Warm up the pages you can see.</p>
+        </div>
+      </header>
+
+      <form class="settings-form">
+        <section class="settings-card" aria-labelledby="preloading-heading">
+          <div class="section-heading">
+            <span class="section-number" aria-hidden="true">01</span>
+            <div>
+              <h2 id="preloading-heading">Preloading</h2>
+              <p>Choose what Snappy Pageload prepares as you browse.</p>
+            </div>
+          </div>
+
+          <div class="setting-list">
+            <div class="setting-row">
+              <div class="setting-copy">
+                <label class="setting-label" for="active">Enable Snappy Pageload</label>
+                <p class="setting-help" id="active-help">Turn off to stop preloading and image lazy loading on every site. The toolbar rocket turns grey while it is off.</p>
+              </div>
+              <input class="toggle" type="checkbox" id="active" aria-describedby="active-help" checked>
+            </div>
+
+            <div class="setting-row">
+              <div class="setting-copy">
+                <label class="setting-label" for="preloadViewport">Preload visible links</label>
+                <p class="setting-help" id="preloadViewport-help">Preloads eligible same-origin links as they scroll into view, up to 30 per page you open. Hovering over or touching a link always preloads it.</p>
+              </div>
+              <input class="toggle" type="checkbox" id="preloadViewport" aria-describedby="preloadViewport-help" checked>
+            </div>
+
+            <div class="setting-row">
+              <div class="setting-copy">
+                <label class="setting-label" for="preloadAssets">Include page assets</label>
+                <p class="setting-help" id="preloadAssets-help">For each visible link, also warm up the scripts, stylesheets, fonts, and a few images found in the destination page. Resources loaded later by scripts may be missed. In Safari, visible links are only preloaded when this is on.</p>
+              </div>
+              <input class="toggle" type="checkbox" id="preloadAssets" aria-describedby="preloadAssets-help" checked>
+            </div>
+
+            <div class="setting-row">
+              <div class="setting-copy">
+                <label class="setting-label" for="imgLazyLoad">Lazy-load images</label>
+                <p class="setting-help" id="imgLazyLoad-help">Lets images load as they come into view. This can alter image loading on the current page.</p>
+              </div>
+              <input class="toggle" type="checkbox" id="imgLazyLoad" aria-describedby="imgLazyLoad-help">
+            </div>
+          </div>
+        </section>
+
+        <section class="settings-card" aria-labelledby="exclusions-heading">
+          <div class="section-heading">
+            <span class="section-number" aria-hidden="true">02</span>
+            <div>
+              <h2 id="exclusions-heading">Sites to skip</h2>
+              <p>Snappy Pageload stays off on these sites.</p>
+            </div>
+          </div>
+
+          <label class="setting-label field-label" for="blacklistSites">Excluded hosts</label>
+          <input class="text-input" type="text" id="blacklistSites" placeholder="example.com, *.example.org" aria-describedby="blacklistSites-help" autocomplete="off" spellcheck="false">
+          <p class="setting-help field-help" id="blacklistSites-help">Enter comma-separated hosts, such as <code>www.example.com</code> or <code>*.example.org</code> to include all subdomains.</p>
+        </section>
+
+        <footer class="form-actions">
+          <span id="status" class="status" role="status" aria-live="polite"></span>
+          <button class="save-button" type="submit">Save settings</button>
+        </footer>
+      </form>
+    </main>
 
     <script src="js/options.js"></script>
   </body>

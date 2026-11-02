@@ -11,6 +11,7 @@ async function loadBackground(stored, { failLazyRegistration = false } = {}) {
   const icons = [];
   const fail = { lazyRegistration: failLazyRegistration };
   const registerAttempts = [];
+  const optionsPage = { opened: 0 };
 
   const browser = {
     storage: {
@@ -30,8 +31,8 @@ async function loadBackground(stored, { failLazyRegistration = false } = {}) {
     },
     contentScripts: {
       register: async (options) => {
-        registerAttempts.push(options.js[0].file);
-        if (fail.lazyRegistration && options.js[0].file === "js/lazy_images.js") throw new Error("register failed");
+        registerAttempts.push(options.js.at(-1).file);
+        if (fail.lazyRegistration && options.js.at(-1).file === "js/lazy_images.js") throw new Error("register failed");
         const registration = { options, active: true, unregister: async () => (registration.active = false) };
         registered.push(registration);
         return registration;
@@ -42,7 +43,11 @@ async function loadBackground(stored, { failLazyRegistration = false } = {}) {
       setTitle: () => {},
       onClicked: { addListener: (listener) => listeners.clicked.push(listener) },
     },
-    runtime: { onInstalled: { addListener: () => {} }, getURL: (path) => path },
+    runtime: {
+      onInstalled: { addListener: () => {} },
+      getURL: (path) => path,
+      openOptionsPage: async () => optionsPage.opened++,
+    },
     tabs: { create: () => {} },
   };
 
@@ -55,13 +60,14 @@ async function loadBackground(stored, { failLazyRegistration = false } = {}) {
     registered
       .filter((registration) => registration.active)
       .map(({ options }) => ({
-        file: options.js[0].file,
+        file: options.js.at(-1).file,
+        files: Array.from(options.js, ({ file }) => file),
         runAt: options.runAt,
         matches: [...options.matches],
         excludeMatches: options.excludeMatches && [...options.excludeMatches],
       }));
 
-  return { storage, listeners, icons, fail, activeScripts, registered, registerAttempts };
+  return { browser, storage, listeners, icons, fail, activeScripts, registered, registerAttempts, optionsPage };
 }
 
 // Lets the storage events and the background's apply queue run to completion.
@@ -70,7 +76,7 @@ const settle = () => sleep(20);
 test("defaults register only the preloader", async () => {
   const { activeScripts, icons } = await loadBackground({});
   assert.deepEqual(activeScripts(), [
-    { file: "js/preload.js", runAt: "document_idle", matches: ["http://*/*", "https://*/*"], excludeMatches: undefined },
+    { file: "js/preload.js", files: ["js/resource-warmer.js", "js/preload.js"], runAt: "document_idle", matches: ["http://*/*", "https://*/*"], excludeMatches: undefined },
   ]);
   assert.equal(icons.at(-1), "icons/rocket.svg");
 });
@@ -96,29 +102,27 @@ test("blacklisted hosts are excluded from every script and invalid entries are d
   }
 });
 
-test("toolbar toggle applies through storage.onChanged", async () => {
-  const { listeners, storage, activeScripts, icons } = await loadBackground({ imgLazyLoad: true });
-
+test("clicking the toolbar button opens the settings page without switching anything off", async () => {
+  const { listeners, storage, activeScripts, optionsPage } = await loadBackground({});
   listeners.clicked[0]();
   await settle();
-  assert.equal(storage.active, false);
+  assert.equal(optionsPage.opened, 1);
+  assert.equal(storage.active, undefined);
+  assert.equal(activeScripts().length, 1);
+});
+
+test("the on/off switch in settings applies through storage.onChanged", async () => {
+  const { browser, activeScripts, icons } = await loadBackground({ imgLazyLoad: true });
+
+  await browser.storage.sync.set({ active: false });
+  await settle();
   assert.deepEqual(activeScripts(), []);
   assert.equal(icons.at(-1), "icons/rocket_da.svg");
 
-  listeners.clicked[0]();
+  await browser.storage.sync.set({ active: true });
   await settle();
-  assert.equal(storage.active, true);
   assert.equal(activeScripts().length, 2);
   assert.equal(icons.at(-1), "icons/rocket.svg");
-});
-
-test("a fast double click toggles twice", async () => {
-  const { listeners, storage, activeScripts } = await loadBackground({});
-  listeners.clicked[0]();
-  listeners.clicked[0]();
-  await settle();
-  assert.equal(storage.active, true);
-  assert.equal(activeScripts().length, 1);
 });
 
 test("a failed registration keeps the previous scripts and rolls back the partial new set", async () => {

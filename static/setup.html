@@ -2,20 +2,18 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Faster Pageload post install instructions</title>
+  <title>Snappy Pageload post install instructions</title>
   <link rel="stylesheet" type="text/css" href="style.css">
 </head>
 <body>
-<h1><img src="rocket.svg" alt=""> Faster Pageload is installed <img src="rocket.svg" alt=""></h1>
-<h2>Make sure Firefox is allowed to prefetch pages</h2>
+<h1><img src="rocket.svg" alt=""> Snappy Pageload is installed <img src="rocket.svg" alt=""></h1>
+<h2>Preload the pages you can see</h2>
 <div>
-  <p>Link prefetching is enabled in Firefox by default, but privacy-hardened setups (for example arkenfox or LibreWolf) turn it off. If pages don't load faster:</p>
-  <ol>
-    <li>Open <code>about:config</code></li>
-    <li>Search for <code>network.prefetch-next</code> and make sure it is <code>true</code></li>
-  </ol>
-  <p>Faster Pageload preloads links on the same site when you hover over them. Preloading every visible link and lazy loading of images can be turned on in the add-on options.</p>
+  <p>Snappy Pageload prepares a link on the same site and protocol when you rest the pointer on it, touch it or click it. It also prepares eligible links as they scroll into view, along with the scripts, stylesheets, fonts, and a few images declared in the destination page and its stylesheets. Destination scripts are not executed, so resources loaded only at runtime may be missed.</p>
+  <p>Visible-link preloading and page assets are on by default. They can download pages you never open: each page you open is limited to 30 destinations and 100 assets, with up to 20 assets per destination.</p>
+  <p>Preloading uses the browser's <code>&lt;link rel="prefetch"&gt;</code>. If nothing is preloaded in Firefox, open <code>about:config</code> and check that <code>network.prefetch-next</code> is <code>true</code>. It is the default, but privacy-hardened setups (arkenfox, LibreWolf) and some policies turn it off.</p>
+  <p>Click the rocket in the toolbar to open the settings, where you can change these options, exclude a site or turn Snappy Pageload off. Image lazy loading remains optional. Reload open tabs after changing settings. Faster navigation depends on the website's cache headers and your browser reusing the early downloads.</p>
 </div>
-<p>If there are problems coming up, do not hesitate to ask: <a href="mailto:fasterpageload@simon-frey.eu">fasterpageload@simon-frey.eu</a></p>
+<p>Found a problem or have a question? <a href="https://github.com/pavankjadda/Snappy-Pageload/issues">Open an issue on GitHub</a>.</p>
 </body>
 </html>

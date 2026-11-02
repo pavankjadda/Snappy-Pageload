@@ -46,14 +46,43 @@ test("invalid entries block saving and are reported", async () => {
   assert.match(page.document.getElementById("status").textContent, /Invalid blacklist entries: not a host, \*\./);
 });
 
-test("preload every visible link is unchecked by default and respects a stored true", async () => {
+test("visible-link and asset preloading default on and respect stored false", async () => {
   const fresh = loadOptionsPage();
   fresh.window.document.dispatchEvent(new fresh.window.Event("DOMContentLoaded"));
   await sleep(0);
-  assert.equal(fresh.document.getElementById("preloadViewport").checked, false);
+  assert.equal(fresh.document.getElementById("preloadViewport").checked, true);
+  assert.equal(fresh.document.getElementById("preloadAssets").checked, true);
 
-  const optedIn = loadOptionsPage({ preloadViewport: true });
-  optedIn.window.document.dispatchEvent(new optedIn.window.Event("DOMContentLoaded"));
+  const disabled = loadOptionsPage({ preloadViewport: false, preloadAssets: false });
+  disabled.window.document.dispatchEvent(new disabled.window.Event("DOMContentLoaded"));
   await sleep(0);
-  assert.equal(optedIn.document.getElementById("preloadViewport").checked, true);
+  assert.equal(disabled.document.getElementById("preloadViewport").checked, false);
+  assert.equal(disabled.document.getElementById("preloadAssets").checked, false);
+});
+
+test("the on/off switch defaults on, shows a stored off and saves", async () => {
+  const fresh = loadOptionsPage();
+  fresh.window.document.dispatchEvent(new fresh.window.Event("DOMContentLoaded"));
+  await sleep(0);
+  assert.equal(fresh.document.getElementById("active").checked, true);
+
+  const page = loadOptionsPage({ active: false });
+  page.window.document.dispatchEvent(new page.window.Event("DOMContentLoaded"));
+  await sleep(0);
+  assert.equal(page.document.getElementById("active").checked, false);
+  page.document.getElementById("active").checked = true;
+  page.document.querySelector("form").dispatchEvent(new page.window.Event("submit", { cancelable: true }));
+  await sleep(0);
+  assert.equal(page.storage.active, true);
+});
+
+test("saving options persists the asset setting", async () => {
+  const page = loadOptionsPage();
+  page.window.document.dispatchEvent(new page.window.Event("DOMContentLoaded"));
+  await sleep(0);
+  page.document.getElementById("preloadAssets").checked = false;
+  page.document.querySelector("form").dispatchEvent(new page.window.Event("submit", { cancelable: true }));
+  await sleep(0);
+  assert.equal(page.storage.preloadAssets, false);
+  assert.match(page.document.getElementById("status").textContent, /^Saved/);
 });

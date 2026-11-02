@@ -1,23 +1,26 @@
 {
-  "name": "faster-pageload",
+  "name": "snappy-pageload",
   "private": true,
   "version": "2.0.0",
-  "description": "Firefox add-on that preloads the pages you are about to open so they appear instantly.",
+  "description": "Preload visible same-site pages and their declared assets.",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/pavankjadda/faster-pageload-web-extensions.git"
+    "url": "https://github.com/pavankjadda/Snappy-Pageload.git"
   },
   "bugs": {
-    "url": "https://github.com/pavankjadda/faster-pageload-web-extensions/issues"
+    "url": "https://github.com/pavankjadda/Snappy-Pageload/issues"
   },
-  "homepage": "https://github.com/pavankjadda/faster-pageload-web-extensions#readme",
+  "homepage": "https://github.com/pavankjadda/Snappy-Pageload#readme",
   "type": "module",
   "scripts": {
     "test": "node --test \"test/*.test.mjs\"",
     "lint": "web-ext lint",
     "start": "web-ext run",
     "build": "web-ext build --overwrite-dest",
+    "build:safari": "node scripts/build-safari.mjs",
+    "build:safari:app": "node scripts/build-safari-app.mjs",
+    "package:safari": "node scripts/package-safari.mjs",
     "package": "pnpm test && pnpm lint && pnpm build",
     "sign": "pnpm test && pnpm lint && node --env-file=.env.local node_modules/web-ext/bin/web-ext.js sign --channel=unlisted"
   },

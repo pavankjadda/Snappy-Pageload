@@ -1,6 +1,8 @@
 "use strict";
 
+const activeElement = document.getElementById("active");
 const preloadViewportElement = document.getElementById("preloadViewport");
+const preloadAssetsElement = document.getElementById("preloadAssets");
 const imgLazyLoadElement = document.getElementById("imgLazyLoad");
 const blacklistSitesElement = document.getElementById("blacklistSites");
 const statusElement = document.getElementById("status");
@@ -47,7 +49,9 @@ async function saveOptions(event) {
   try {
     // The background script picks the change up via storage.onChanged; no reload needed.
     await browser.storage.sync.set({
+      active: activeElement.checked,
       preloadViewport: preloadViewportElement.checked,
+      preloadAssets: preloadAssetsElement.checked,
       imgLazyLoad: imgLazyLoadElement.checked,
       blacklistSites,
     });
@@ -60,8 +64,10 @@ async function saveOptions(event) {
 
 async function restoreOptions() {
   try {
-    const settings = await browser.storage.sync.get(["preloadViewport", "imgLazyLoad", "blacklistSites"]);
-    preloadViewportElement.checked = settings.preloadViewport === true;
+    const settings = await browser.storage.sync.get(["active", "preloadViewport", "preloadAssets", "imgLazyLoad", "blacklistSites"]);
+    activeElement.checked = settings.active !== false;
+    preloadViewportElement.checked = settings.preloadViewport !== false;
+    preloadAssetsElement.checked = settings.preloadAssets !== false;
     imgLazyLoadElement.checked = settings.imgLazyLoad === true;
     blacklistSitesElement.value = settings.blacklistSites || "";
   } catch (error) {

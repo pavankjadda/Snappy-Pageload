@@ -1,13 +1,16 @@
 # Builds the add-on for a GitHub release and attaches the files users can install:
-# - faster_pageload-<version>.zip: unsigned build, attached as soon as tests pass. Loads temporarily
+# - snappy_pageload-<version>.zip: unsigned build, attached as soon as tests pass. Loads temporarily
 #   via about:debugging, or permanently in Firefox Developer Edition/Nightly/ESR with
 #   xpinstall.signatures.required = false.
 # - *.xpi: signed by Mozilla (unlisted channel), attached by a separate job once AMO has signed it
 #   (usually a few minutes). The only file regular Firefox installs permanently.
+# - *-safari-web-extension.zip: Safari resources for temporary/developer loading.
+# - *-macOS-unsigned-dev.app.zip: universal Safari app for developer/beta testing only.
+#   This app has an ad-hoc signature, not an Apple Developer ID signature or notarization.
 #
 # Signing needs the repository secrets AMO_API_KEY (JWT issuer) and AMO_API_SECRET (JWT secret)
-# from addons.mozilla.org → Developer Hub → Tools → Manage API Keys. Without them, only the zip
-# is attached.
+# from addons.mozilla.org → Developer Hub → Tools → Manage API Keys. Without them, the unsigned
+# Firefox zip and Safari development artifacts are still attached.
 name: Release
 
 on:
@@ -31,7 +34,7 @@ env:
 
 jobs:
   build:
-    name: Test, build and attach zip
+    name: Test and attach Firefox and Safari extension zips
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -61,11 +64,68 @@ jobs:
       - run: pnpm test
       - run: pnpm lint
       - run: pnpm build
+      - run: pnpm package:safari
 
-      - name: Attach zip to the release
+      - name: Attach extension zips to the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload "$TAG" web-ext-artifacts/*.zip --clobber
+
+  safari:
+    name: Build and attach Safari macOS development app
+    needs: build
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.TAG }}
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: latest
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Ad-hoc signing needs no Apple certificate or notarization credentials.
+      # Users must enable unsigned extensions; this is not a trusted production installer.
+      - name: Build universal Safari development app
+        env:
+          SAFARI_SIGNING_MODE: adhoc
+          SAFARI_BUILD_NUMBER: ${{ github.run_number }}
+        run: pnpm build:safari:app
+
+      - name: Verify and archive Safari app
+        run: |
+          set -euo pipefail
+          version=$(node -p "require('./manifest.json').version")
+          app="build/safari/DerivedData/Build/Products/Release/Snappy Pageload.app"
+          extension="$app/Contents/PlugIns/Snappy Pageload Extension.appex"
+          codesign --verify --deep --strict "$app"
+          for architecture in arm64 x86_64; do
+            lipo "$app/Contents/MacOS/Snappy Pageload" -verify_arch "$architecture"
+            lipo "$extension/Contents/MacOS/Snappy Pageload Extension" -verify_arch "$architecture"
+          done
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Contents/Info.plist")" = "io.github.pavankjadda.SnappyPageload"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$extension/Contents/Info.plist")" = "io.github.pavankjadda.SnappyPageload.Extension"
+          for bundle in "$app" "$extension"; do
+            signature=$(codesign -dv "$bundle" 2>&1)
+            echo "$signature" | grep -q '^Signature=adhoc$'
+            test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$bundle/Contents/Info.plist")" = "$version"
+            test "$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$bundle/Contents/Info.plist")" = "13.0"
+          done
+          mkdir -p web-ext-artifacts
+          ditto -c -k --sequesterRsrc --keepParent "$app" "web-ext-artifacts/Snappy-Pageload-$version-macOS-unsigned-dev.app.zip"
+
+      - name: Attach Safari macOS development app to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" web-ext-artifacts/*-macOS-unsigned-dev.app.zip --clobber
 
   sign:
     name: Sign with Mozilla and attach xpi
@@ -76,7 +136,7 @@ jobs:
     steps:
       - name: Skip without AMO credentials
         if: env.HAS_AMO_KEYS != 'true'
-        run: echo "::warning::AMO_API_KEY/AMO_API_SECRET secrets are not set; only the unsigned zip was attached."
+        run: echo "::warning::AMO_API_KEY/AMO_API_SECRET secrets are not set; Firefox remains unsigned. Safari development artifacts are built separately."
 
       - uses: actions/checkout@v7
         if: env.HAS_AMO_KEYS == 'true'

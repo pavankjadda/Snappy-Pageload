@@ -1,21 +1,22 @@
 {
   "manifest_version": 2,
-  "name": "Faster Pageload",
+  "name": "Snappy Pageload",
   "version": "2.0.0",
-  "author": "Simon Frey",
+  "author": "Pavan Kumar Jadda",
   "developer": {
-    "name": "Simon Frey",
-    "url": "https://simon-frey.eu/"
+    "name": "Pavan Kumar Jadda",
+    "url": "https://github.com/pavankjadda"
   },
-  "description": "Load webpages faster by preloading the pages you are about to open. Install the plugin and you will feel how your browser becomes faster.",
-  "homepage_url": "https://github.com/simonfrey/faster-pageload-web-extensions",
+  "description": "Preload same-origin links on hover and as they scroll into view, along with the scripts, stylesheets, fonts, and images their pages declare.",
+  "homepage_url": "https://github.com/pavankjadda/Snappy-Pageload",
 
   "icons": {
     "48": "icons/rocket.svg",
     "96": "icons/rocket.svg"
   },
   "options_ui": {
-    "page": "options.html"
+    "page": "options.html",
+    "open_in_tab": true
   },
 
   "background": {
@@ -33,7 +34,7 @@
 
   "browser_action": {
     "default_icon": "icons/rocket.svg",
-    "default_title": "Faster Pageload"
+    "default_title": "Snappy Pageload"
   },
 
   "permissions": ["storage", "http://*/*", "https://*/*"]

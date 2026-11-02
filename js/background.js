@@ -3,7 +3,8 @@
 const DEFAULT_SETTINGS = {
   active: true,
   imgLazyLoad: false,
-  preloadViewport: false,
+  preloadViewport: true,
+  preloadAssets: true,
   blacklistSites: "",
 };
 
@@ -13,6 +14,7 @@ const BLACKLIST_HOST = /^(\*\.)?[a-z0-9_-]+(\.[a-z0-9_-]+)*$/;
 
 // Only web pages; the preloader has nothing to do on file:, ftp: or other schemes.
 const WEB_PAGES = ["http://*/*", "https://*/*"];
+const contentScriptAPI = globalThis.fasterPageloadContentScripts ?? browser.contentScripts;
 
 let registeredScripts = [];
 // Identifies the configuration behind registeredScripts, so unrelated setting changes
@@ -31,7 +33,7 @@ function toExcludeMatches(blacklistSites) {
     .map((host) => host.trim().toLowerCase())
     .filter((host) => {
       if (BLACKLIST_HOST.test(host)) return true;
-      if (host) console.warn(`[faster pageload] Ignoring invalid blacklist entry: ${host}`);
+      if (host) console.warn(`[snappy pageload] Ignoring invalid blacklist entry: ${host}`);
       return false;
     })
     .map((host) => `*://${host}/*`);
@@ -39,7 +41,9 @@ function toExcludeMatches(blacklistSites) {
 
 function updateBrowserAction(active) {
   browser.browserAction.setIcon({ path: active ? "icons/rocket.svg" : "icons/rocket_da.svg" });
-  browser.browserAction.setTitle({ title: active ? "Faster Pageload (on)" : "Faster Pageload (off)" });
+  browser.browserAction.setTitle({
+    title: active ? "Snappy Pageload is on. Click for settings." : "Snappy Pageload is off. Click for settings.",
+  });
 }
 
 // Content scripts are registered at runtime so that the on/off switch and the blacklist
@@ -60,16 +64,16 @@ async function registerContentScripts(settings) {
       if (excludeMatches.length > 0) target.excludeMatches = excludeMatches;
 
       next.push(
-        await browser.contentScripts.register({
+        await contentScriptAPI.register({
           ...target,
-          js: [{ file: "js/preload.js" }],
+          js: [{ file: "js/resource-warmer.js" }, { file: "js/preload.js" }],
           runAt: "document_idle",
         })
       );
 
       if (settings.imgLazyLoad) {
         next.push(
-          await browser.contentScripts.register({
+          await contentScriptAPI.register({
             ...target,
             js: [{ file: "js/lazy_images.js" }],
             runAt: "document_start",
@@ -77,6 +81,9 @@ async function registerContentScripts(settings) {
         );
       }
     }
+    // Safari event pages can restart while earlier registrations remain active.
+    // Keep them until the complete replacement has been registered successfully.
+    await contentScriptAPI.finishUpdate?.();
   } catch (error) {
     await Promise.allSettled(next.map((script) => script.unregister()));
     throw error;
@@ -91,7 +98,7 @@ async function registerContentScripts(settings) {
 function enqueue(task) {
   applyQueue = applyQueue
     .then(task)
-    .catch((error) => console.error("[faster pageload] Failed to apply settings:", error));
+    .catch((error) => console.error("[snappy pageload] Failed to apply settings:", error));
   return applyQueue;
 }
 
@@ -109,12 +116,8 @@ browser.runtime.onInstalled.addListener((details) => {
   }
 });
 
-browser.browserAction.onClicked.addListener(() =>
-  enqueue(async () => {
-    const { active } = await getSettings();
-    await browser.storage.sync.set({ active: !active });
-  })
-);
+// The toolbar button opens the settings page, which holds the on/off switch.
+browser.browserAction.onClicked.addListener(() => browser.runtime.openOptionsPage());
 
 browser.storage.onChanged.addListener((changes, areaName) => {
   if (areaName === "sync") applySettings();
