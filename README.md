@@ -38,7 +38,7 @@ Click the toolbar rocket to open settings, then click **Save settings** after ma
 | Lazy-load images | Off | Use native lazy loading for images on the current page |
 | Blacklist sites | Empty | Disable the extension on selected sites |
 
-**Use Firefox's built-in prefetching** uses Firefox's privacy API (`privacy.network.networkPredictionEnabled`), which controls link prefetching (`network.prefetch-next`), DNS prefetching and the network predictor. While it is on, Snappy Pageload turns these on even if a privacy setup such as arkenfox, LibreWolf or a hardened profile turned them off. If you want your own choice kept, turn this setting off. Turning it off, switching Snappy Pageload off or removing the add-on restores your own setting. If an enterprise policy or another extension controls the setting, Snappy Pageload cannot change it. This setting is not available in Safari (no privacy API), so it is hidden there.
+**Use Firefox's built-in prefetching** uses Firefox's privacy API (`privacy.network.networkPredictionEnabled`), which controls link prefetching (`network.prefetch-next`), DNS prefetching (`network.dns.disablePrefetch`) and speculative connections (`network.http.speculative-parallel-limit`). Older Firefox versions also put the network predictor under this setting; current versions no longer have one. While it is on, Snappy Pageload turns these on even if a privacy setup such as arkenfox, LibreWolf or a hardened profile turned them off. If you want your own choice kept, turn this setting off. Turning it off, switching Snappy Pageload off or removing the add-on restores your own setting. If an enterprise policy or another extension controls the setting, Snappy Pageload cannot change it. This setting is not available in Safari (no privacy API), so it is hidden there.
 
 Blacklist examples: `example.com` for one host, or `*.example.com` for that host and its subdomains. Separate entries with commas.
 
@@ -47,12 +47,64 @@ Blacklist examples: `example.com` for one host, or `*.example.com` for that host
 ## Limits and privacy
 
 - Only same-origin destinations—matching scheme, host and port—are eligible. Visible-link preloading skips query strings, user-generated links and URLs that look like actions.
-- Limits per page load: **30 destination pages**, **100 assets total**, **20 assets per destination**, and, in Safari, up to **4 assets warmed at a time**. Firefox does not apply that limit: it adds low-priority `<link rel=prefetch>` hints and Firefox's own prefetch queue fetches them (up to 6 in parallel, starting after the current page has finished loading).
+- Limits per page load: **30 destination pages**, **100 assets total**, **20 assets per destination**, and, in Safari, up to **4 assets warmed at a time**. Firefox does not apply that limit: it adds low-priority `<link rel=prefetch>` hints and Firefox's own prefetch queue fetches them (by default up to 6 in parallel, starting after the current page has finished loading; see [Firefox `about:config` tuning](#firefox-aboutconfig-tuning) to change that).
 - Destination scripts are not executed. Resources loaded only by JavaScript may be missed; the extension does not download every asset indiscriminately.
 - Cache headers and browser behavior determine reuse. Early downloads do not guarantee faster navigation; Safari may fetch the destination HTML again.
 - No telemetry or collection server. Sites and referenced asset hosts can see early requests, even when you never open the destination. Use the blacklist where needed.
 
 If preloading does not work, check the enable switch, site permissions and blacklist, then reload the page. In Firefox, `network.prefetch-next` must be enabled for native prefetching. With **Use Firefox's built-in prefetching** on, Snappy Pageload handles this automatically, unless an enterprise policy or another extension controls the setting. If it does not take effect, or you turned that setting off, open `about:config` and set `network.prefetch-next` to `true` yourself.
+
+## Firefox `about:config` tuning
+
+Optional. Snappy Pageload works without any of this; these preferences make Firefox itself preload more aggressively. Defaults were checked against Firefox 160, and preferences can change or disappear in later versions. To undo a change, reset the preference in `about:config`.
+
+The **Use Firefox's built-in prefetching** setting only manages `network.prefetch-next`, `network.dns.disablePrefetch` and `network.http.speculative-parallel-limit`. Everything else below is yours to set.
+
+### Prefetch queue
+
+These control how Firefox fetches the `<link rel=prefetch>` hints Snappy Pageload adds.
+
+| Preference | Default | Aggressive value | Effect |
+|---|---|---|---|
+| `network.prefetch-next` | `true` | `true` | Enables link prefetching. Must stay on. |
+| `network.prefetch-next.parallelism` | `6` | `20` | Number of prefetches that run at the same time. |
+| `network.prefetch-next.aggressive` | `false` | `true` | Starts prefetching while the current page is still loading, instead of waiting for it to finish. |
+| `network.prefetch-next.force-valid-for` | `300` | `90` | Seconds a prefetched page without cache headers is reused before Firefox revalidates it. `90` favours fresh pages; raise it (for example `900`) for more cache hits at the risk of stale pages. |
+| `network.http.max-persistent-connections-per-server` | `6` | `15` | HTTP/1.1 hosts only: connections allowed to one host, which otherwise caps the prefetch queue at 6. No effect on HTTP/2 or HTTP/3. |
+
+`network.prefetch-next.parallelism` and `network.prefetch-next.aggressive` are not listed until you create them: type the name in `about:config`, choose **Number** or **Boolean**, and click **+**.
+
+### DNS and connections
+
+Snappy Pageload only prefetches same-origin pages, so these are what speed up links to other sites.
+
+| Preference | Default | Aggressive value | Effect |
+|---|---|---|---|
+| `network.dns.disablePrefetch` | `false` | `false` | Allows speculative DNS lookups. |
+| `network.dns.disablePrefetchFromHTTPS` | `false` | `false` | Allows DNS prefetching from HTTPS pages. |
+| `dom.prefetch_dns_for_anchor_https_document` | `false` | `true` | Resolves DNS for every link on HTTPS pages, not only on HTTP pages. |
+| `network.predictor.enable-hover-on-ssl` | `false` | `true` | Hovering a link on an HTTPS page opens a connection (DNS, TCP, TLS) to its host. By default this happens only on HTTP pages. |
+| `network.dnsCacheExpiration` | `60` | `300` | Seconds a DNS answer is kept. |
+
+### Speculation rules (experimental)
+
+Firefox enables these by default only in Nightly. They make Firefox honour the `<script type="speculationrules">` prefetch rules that sites ship for Chrome (same-origin only). Turn `dom.speculation_rules.enabled` off first if pages misbehave.
+
+| Preference | Default | Aggressive value | Effect |
+|---|---|---|---|
+| `dom.speculation_rules.enabled` | `false` | `true` | Turns speculation rules on. |
+| `dom.speculation_rules.moderate_hover_delay_ms` | `200` | `50` | Hover time in milliseconds before a "moderate" rule prefetches. |
+| `dom.speculation_rules.max_records_per_document` | `20` | `50` | Maximum prefetches per page from speculation rules. |
+
+### Already at their most aggressive
+
+Leave these at their defaults: `network.http.speculative-parallel-limit` (`20`), `network.preconnect`, `network.modulepreload`, `network.early-hints.enabled`, `browser.urlbar.speculativeConnect.enabled` and `browser.places.speculativeConnect.enabled` (all `true`).
+
+### Trade-offs
+
+- More requests, data and battery use.
+- Your DNS resolver and the linked sites see lookups and connections for pages you never open.
+- Firefox partitions its cache per site, so a prefetched cross-origin page is never reused; for links to other sites, DNS and connection warming is the most these settings can do.
 
 ## Permissions
 
